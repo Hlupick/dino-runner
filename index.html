@@ -1,393 +1,671 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Runner · Minimal</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-        }
+<meta charset="UTF-8" />
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 
-        body {
-            background: #0a0f1c;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            font-family: system-ui, -apple-system, 'Segoe UI', monospace;
-            padding: 16px;
-            touch-action: manipulation;
-        }
+<title>Ultra Dino Runner</title>
 
-        .game-wrapper {
-            width: 100%;
-            max-width: 700px;
-            margin: 0 auto;
-        }
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+}
 
-        canvas {
-            display: block;
-            width: 100%;
-            height: auto;
-            background: #11161f;
-            border-radius: 24px;
-            cursor: pointer;
-            touch-action: none;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-        }
+:root{
+    --bg:#07111d;
+    --panel:#0f1b29;
+    --panel2:#152536;
+    --text:#e9f4ff;
+}
 
-        .info {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 16px;
-            padding: 0 8px;
-        }
+body{
+    background:
+        radial-gradient(circle at top,#13253b 0%,#08111d 55%,#050910 100%);
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    overflow:hidden;
+    font-family:Inter,system-ui,sans-serif;
+    padding:12px;
+    color:white;
+}
 
-        .score, .best {
-            font-size: 1.3rem;
-            font-weight: 600;
-            background: #1e2a32;
-            padding: 6px 18px;
-            border-radius: 40px;
-            color: #c0e0ff;
-        }
+.game-shell{
+    width:min(100%,900px);
+}
 
-        .best {
-            color: #ffcf8a;
-        }
+canvas{
+    width:100%;
+    height:auto;
+    display:block;
+    border-radius:28px;
+    background:
+        linear-gradient(to bottom,#0e2034 0%,#091522 50%,#081019 100%);
+    box-shadow:
+        0 15px 45px rgba(0,0,0,.45),
+        inset 0 0 60px rgba(255,255,255,.03);
+    touch-action:none;
+}
 
-        .hint {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 0.75rem;
-            color: #6c86a3;
-            background: #0f1722;
-            display: inline-block;
-            width: auto;
-            padding: 6px 16px;
-            border-radius: 50px;
-            letter-spacing: 0.5px;
-        }
+.ui{
+    margin-top:14px;
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+}
 
-        @media (max-width: 550px) {
-            .score, .best { font-size: 1rem; padding: 4px 14px; }
-            .hint { font-size: 0.65rem; margin-top: 14px; }
-        }
-    </style>
+.card{
+    background:rgba(20,35,50,.7);
+    border:1px solid rgba(255,255,255,.08);
+    backdrop-filter:blur(12px);
+    color:var(--text);
+    padding:10px 18px;
+    border-radius:20px;
+    font-weight:700;
+    font-size:1rem;
+    flex:1;
+    text-align:center;
+}
+
+.hint{
+    margin-top:14px;
+    text-align:center;
+    color:#8db0d2;
+    font-size:.85rem;
+    letter-spacing:.4px;
+}
+
+@media (max-width:650px){
+    .card{
+        font-size:.9rem;
+        padding:9px 12px;
+    }
+
+    .hint{
+        font-size:.75rem;
+    }
+}
+</style>
 </head>
+
 <body>
-<div class="game-wrapper">
-    <canvas id="gameCanvas" width="700" height="220"></canvas>
-    <div class="info">
-        <div class="score">🏆 <span id="scoreValue">0</span></div>
-        <div class="best">⭐ <span id="bestValue">0</span></div>
+
+<div class="game-shell">
+
+    <canvas id="game"></canvas>
+
+    <div class="ui">
+        <div class="card">🏆 SCORE: <span id="score">0</span></div>
+        <div class="card">⭐ BEST: <span id="best">0</span></div>
     </div>
-    <div class="hint">⬤  нажми / коснись — прыжок  ⬤</div>
+
+    <div class="hint">
+        SPACE / CLICK / TOUCH — прыжок
+    </div>
+
 </div>
 
 <script>
-    (function(){
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const W = 700, H = 220;
-        canvas.width = W; canvas.height = H;
+(() => {
 
-        let gameRunning = true;
-        let score = 0;
-        let bestScore = localStorage.getItem('dinoBest') ? Math.floor(parseFloat(localStorage.getItem('dinoBest'))) : 0;
-        document.getElementById('bestValue').innerText = bestScore;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-        // ---- РАЗМЕРЫ ПЕРСОНАЖА (те же, что у динозавра) ----
-        const CHAR_W = 28;
-        const CHAR_H = 34;
-        let charY = H - CHAR_H - 8;
-        const CHAR_BASE = H - CHAR_H - 8;
-        let isJumping = false, jumpVel = 0;
-        const GRAVITY = 0.85, JUMP_POWER = -9.8;
+const scoreEl = document.getElementById("score");
+const bestEl = document.getElementById("best");
 
-        // Препятствия
-        let obstacles = [];
-        const OBS_W = 14, OBS_H = 26;
-        let currentSpeed = 4.5;
-        let baseSpeed = 4.5;
-        let spawnCounter = 8;
-        let spawnGap = 70;
-        let groundOffset = 0;
-        let canJumpFlag = true;
+const BASE_W = 900;
+const BASE_H = 320;
 
-        // ---- ОТРИСОВКА НОВОГО ПЕРСОНАЖА ПО КООРДИНАТАМ ИЗ JSON ----
-        // Исходные линии (масштаб от -4 до +4 по X и Y)
-        const lines = [
-            [[-3.94, -3.5], [-3.94, 0.5], [-3.94, 3.5]],
-            [[-3.94, -3.5], [0.06, -3.5], [3.94, -3.5]],
-            [[-3.94, 0.5], [-1.11, 3.33], [0.94, 4.5]],
-            [[0.94, 4.5], [0.94, 0.5]],
-            [[0.94, 4.5], [3.94, 4.5]],
-            [[3.94, -3.5], [3.94, 0.5], [3.94, 4.5]]
-        ];
+function resizeCanvas(){
+    canvas.width = BASE_W;
+    canvas.height = BASE_H;
+}
+resizeCanvas();
 
-        function drawCharacter(ctx, x, y, w, h) {
-            // Масштабируем: исходные координаты лежат в диапазоне примерно от -4 до 4 по X и Y.
-            // Центр фигуры (0,0) совместим с центром нашего прямоугольника.
-            const centerX = x + w/2;
-            const centerY = y + h/2;
-            const scaleX = w / 8;   // 8 = размах по X от -4 до +4
-            const scaleY = h / 8;   // 8 = размах по Y от -4 до +4
+let best = +localStorage.getItem("ultraDinoBest") || 0;
+bestEl.textContent = best;
 
-            ctx.save();
-            ctx.translate(centerX, centerY);
-            ctx.scale(scaleX, scaleY);
+let gameSpeed = 6;
+let gravity = 0.72;
+let score = 0;
+let gameOver = false;
+let groundOffset = 0;
+let frame = 0;
+
+const stars = [];
+const clouds = [];
+const particles = [];
+
+for(let i=0;i<120;i++){
+    stars.push({
+        x:Math.random()*BASE_W,
+        y:Math.random()*180,
+        size:Math.random()*2.2,
+        alpha:0.3+Math.random()*0.7,
+        twinkle:Math.random()*1000
+    });
+}
+
+for(let i=0;i<5;i++){
+    clouds.push({
+        x:Math.random()*BASE_W,
+        y:40+Math.random()*80,
+        w:100+Math.random()*90,
+        h:35+Math.random()*20,
+        speed:.15+Math.random()*.35
+    });
+}
+
+const player = {
+    x:95,
+    y:0,
+    w:54,
+    h:68,
+    velY:0,
+    jumping:false,
+    blink:0,
+    blinkTimer:0,
+    legAnim:0,
+    pupilOffset:0
+};
+
+player.y = BASE_H - player.h - 26;
+
+const obstacles = [];
+
+function reset(){
+    gameSpeed = 6;
+    score = 0;
+    frame = 0;
+    obstacles.length = 0;
+    particles.length = 0;
+    gameOver = false;
+
+    player.y = BASE_H - player.h - 26;
+    player.velY = 0;
+    player.jumping = false;
+}
+
+function jump(){
+
+    if(gameOver){
+        reset();
+        return;
+    }
+
+    if(!player.jumping){
+        player.jumping = true;
+        player.velY = -15;
+    }
+}
+
+function spawnObstacle(){
+
+    const size = 35 + Math.random()*30;
+
+    obstacles.push({
+        x:BASE_W + 50,
+        y:BASE_H - size - 24,
+        w:30 + Math.random()*18,
+        h:size,
+        offset:Math.random()*10
+    });
+}
+
+function update(){
+
+    frame++;
+
+    if(gameOver) return;
+
+    score += 0.12;
+
+    if(Math.floor(score) > best){
+        best = Math.floor(score);
+        localStorage.setItem("ultraDinoBest", best);
+    }
+
+    scoreEl.textContent = Math.floor(score);
+    bestEl.textContent = best;
+
+    gameSpeed += 0.0008;
+
+    if(frame % Math.max(55 - Math.floor(score/25), 28) === 0){
+        spawnObstacle();
+    }
+
+    player.velY += gravity;
+    player.y += player.velY;
+
+    const groundY = BASE_H - player.h - 26;
+
+    if(player.y >= groundY){
+        player.y = groundY;
+        player.velY = 0;
+        player.jumping = false;
+    }
+
+    if(!player.jumping){
+        player.legAnim += 0.28;
+    }
+
+    player.blinkTimer++;
+
+    if(player.blinkTimer > 90 + Math.random()*120){
+        player.blink = 6;
+        player.blinkTimer = 0;
+    }
+
+    if(player.blink > 0){
+        player.blink--;
+    }
+
+    player.pupilOffset = player.jumping ? 2 : 0;
+
+    for(let cloud of clouds){
+        cloud.x -= cloud.speed;
+
+        if(cloud.x + cloud.w < 0){
+            cloud.x = BASE_W + 40;
+        }
+    }
+
+    for(let i=obstacles.length-1;i>=0;i--){
+
+        const o = obstacles[i];
+        o.x -= gameSpeed;
+
+        if(o.x + o.w < 0){
+            obstacles.splice(i,1);
+            continue;
+        }
+
+        if(
+            player.x + 10 < o.x + o.w &&
+            player.x + player.w - 10 > o.x &&
+            player.y + 8 < o.y + o.h &&
+            player.y + player.h - 8 > o.y
+        ){
+            gameOver = true;
+
+            for(let p=0;p<25;p++){
+                particles.push({
+                    x:player.x+player.w/2,
+                    y:player.y+player.h/2,
+                    vx:(Math.random()-0.5)*7,
+                    vy:(Math.random()-0.5)*7,
+                    size:2+Math.random()*4,
+                    life:50
+                });
+            }
+        }
+    }
+
+    for(let i=particles.length-1;i>=0;i--){
+
+        const p = particles[i];
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+
+        if(p.life <= 0){
+            particles.splice(i,1);
+        }
+    }
+
+    groundOffset += gameSpeed;
+}
+
+function drawBackground(){
+
+    const sky = ctx.createLinearGradient(0,0,0,BASE_H);
+
+    sky.addColorStop(0,"#12253d");
+    sky.addColorStop(.45,"#091321");
+    sky.addColorStop(1,"#05080f");
+
+    ctx.fillStyle = sky;
+    ctx.fillRect(0,0,BASE_W,BASE_H);
+
+    // stars
+    for(let s of stars){
+
+        const pulse =
+            0.6 + Math.sin((frame+s.twinkle)*0.02)*0.4;
+
+        ctx.globalAlpha = s.alpha * pulse;
+
+        ctx.fillStyle = "#fff";
+
+        ctx.beginPath();
+        ctx.arc(s.x,s.y,s.size,0,Math.PI*2);
+        ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+
+    // moon
+    ctx.fillStyle = "#f3f5ff";
+    ctx.beginPath();
+    ctx.arc(BASE_W-120,75,32,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = "#d7dcef";
+    ctx.beginPath();
+    ctx.arc(BASE_W-110,70,28,0,Math.PI*2);
+    ctx.fill();
+}
+
+function drawClouds(){
+
+    ctx.fillStyle = "rgba(120,160,220,.14)";
+
+    for(let c of clouds){
+
+        ctx.beginPath();
+
+        ctx.ellipse(c.x,c.y,c.w*.4,c.h*.45,0,0,Math.PI*2);
+        ctx.ellipse(c.x+35,c.y-8,c.w*.28,c.h*.35,0,0,Math.PI*2);
+        ctx.ellipse(c.x-35,c.y+4,c.w*.26,c.h*.3,0,0,Math.PI*2);
+
+        ctx.fill();
+    }
+}
+
+function drawGround(){
+
+    // terrain
+    const grad = ctx.createLinearGradient(0,BASE_H-40,0,BASE_H);
+
+    grad.addColorStop(0,"#284c2d");
+    grad.addColorStop(1,"#112314");
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,BASE_H-30,BASE_W,30);
+
+    // glowing line
+    ctx.strokeStyle = "#74d26d";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.moveTo(0,BASE_H-29);
+    ctx.lineTo(BASE_W,BASE_H-29);
+    ctx.stroke();
+
+    // grass
+    for(let i=0;i<80;i++){
+
+        const x = (i*20 - (groundOffset*1.4)%20);
+
+        const h = 4 + Math.sin(i+frame*0.04)*3;
+
+        ctx.strokeStyle = "#6fd26c";
+
+        ctx.beginPath();
+        ctx.moveTo(x,BASE_H-30);
+        ctx.lineTo(x+1,BASE_H-30-h);
+        ctx.stroke();
+    }
+}
+
+function drawPlayer(){
+
+    const x = player.x;
+    const y = player.y;
+
+    // shadow
+    ctx.fillStyle = "rgba(0,0,0,.25)";
+    ctx.beginPath();
+    ctx.ellipse(
+        x+player.w/2,
+        BASE_H-15,
+        28,
+        7,
+        0,
+        0,
+        Math.PI*2
+    );
+    ctx.fill();
+
+    // body gradient
+    const bodyGrad = ctx.createLinearGradient(x,y,x,y+player.h);
+
+    bodyGrad.addColorStop(0,"#8dff84");
+    bodyGrad.addColorStop(.5,"#53d15f");
+    bodyGrad.addColorStop(1,"#2f9f47");
+
+    ctx.fillStyle = bodyGrad;
+
+    ctx.beginPath();
+
+    ctx.roundRect(x,y,player.w,player.h,14);
+
+    ctx.fill();
+
+    // belly
+    ctx.fillStyle = "rgba(255,255,255,.12)";
+    ctx.fillRect(x+10,y+12,player.w-20,player.h-22);
+
+    // spikes
+    for(let i=0;i<5;i++){
+
+        ctx.fillStyle = "#b7ff94";
+
+        ctx.beginPath();
+
+        ctx.moveTo(x+7+i*9,y+4);
+        ctx.lineTo(x+12+i*9,y-10);
+        ctx.lineTo(x+17+i*9,y+4);
+
+        ctx.fill();
+    }
+
+    // tail
+    ctx.fillStyle = "#3fb153";
+
+    ctx.beginPath();
+    ctx.moveTo(x-8,y+40);
+    ctx.lineTo(x-18,y+32);
+    ctx.lineTo(x-8,y+28);
+    ctx.fill();
+
+    // eye
+    ctx.fillStyle = "#fff";
+
+    if(player.blink > 0){
+        ctx.fillRect(x+35,y+16,11,2);
+    }else{
+
+        ctx.beginPath();
+        ctx.arc(x+40,y+19,6,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.fillStyle = "#000";
+
+        ctx.beginPath();
+        ctx.arc(
+            x+41+player.pupilOffset,
+            y+20,
+            2.5,
+            0,
+            Math.PI*2
+        );
+        ctx.fill();
+    }
+
+    // mouth
+    ctx.strokeStyle = "#174e1d";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.moveTo(x+34,y+34);
+    ctx.lineTo(x+46,y+34);
+    ctx.stroke();
+
+    // animated legs
+    const legMove = Math.sin(player.legAnim)*6;
+
+    ctx.fillStyle = "#237f36";
+
+    if(player.jumping){
+
+        ctx.fillRect(x+8,y+player.h-4,10,10);
+        ctx.fillRect(x+34,y+player.h-4,10,10);
+
+    }else{
+
+        ctx.fillRect(x+8,y+player.h-2,10,14+legMove);
+        ctx.fillRect(x+34,y+player.h-2,10,14-legMove);
+    }
+}
+
+function drawObstacles(){
+
+    for(let o of obstacles){
+
+        // cactus gradient
+        const grad = ctx.createLinearGradient(
+            o.x,
+            o.y,
+            o.x,
+            o.y+o.h
+        );
+
+        grad.addColorStop(0,"#5eff7e");
+        grad.addColorStop(.5,"#30c95d");
+        grad.addColorStop(1,"#17803f");
+
+        ctx.fillStyle = grad;
+
+        ctx.beginPath();
+        ctx.roundRect(o.x,o.y,o.w,o.h,12);
+        ctx.fill();
+
+        // branches
+        ctx.fillRect(o.x-10,o.y+25,12,10);
+        ctx.fillRect(o.x+o.w-2,o.y+12,10,14);
+
+        // glow
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "rgba(74,255,137,.4)";
+
+        ctx.fillRect(o.x+5,o.y+5,2,o.h-10);
+
+        ctx.shadowBlur = 0;
+
+        // spikes
+        ctx.strokeStyle = "#d7ffd9";
+
+        for(let i=0;i<12;i++){
+
+            const sy = o.y + i*(o.h/12);
+
             ctx.beginPath();
-            ctx.lineWidth = 0.2;   // толщина линии в локальных координатах (~2 пикселя)
-            ctx.strokeStyle = "#8bc34a";
-            ctx.fillStyle = "#8bc34a";
-            
-            // Рисуем каждый отрезок
-            for (let poly of lines) {
-                if (poly.length < 2) continue;
-                ctx.beginPath();
-                ctx.moveTo(poly[0][0], poly[0][1]);
-                for (let i = 1; i < poly.length; i++) {
-                    ctx.lineTo(poly[i][0], poly[i][1]);
-                }
-                ctx.stroke();
-            }
-            // Заполним внутренность (чтобы было похоже на силуэт) – необязательно, но добавим лёгкую заливку
-            // Можно залить всю фигуру – для этого соберём все точки в один контур. Упростим: просто закрасим полупрозрачным фоном.
-            ctx.globalAlpha = 0.15;
-            ctx.fillStyle = "#8bc34a";
-            for (let poly of lines) {
-                if (poly.length < 3) continue;
-                ctx.beginPath();
-                ctx.moveTo(poly[0][0], poly[0][1]);
-                for (let i = 1; i < poly.length; i++) {
-                    ctx.lineTo(poly[i][0], poly[i][1]);
-                }
-                ctx.fill();
-            }
-            ctx.globalAlpha = 1;
-            
-            // Дополнительно нарисуем «глаз» для живости (маленькая точка)
-            ctx.fillStyle = "#ffffff";
+            ctx.moveTo(o.x+4,sy);
+            ctx.lineTo(o.x-3,sy+2);
+            ctx.stroke();
+
             ctx.beginPath();
-            ctx.arc(0.94, 2.0, 0.2, 0, 2*Math.PI);
-            ctx.fill();
-            ctx.fillStyle = "#1c2b0f";
-            ctx.beginPath();
-            ctx.arc(0.94, 2.0, 0.1, 0, 2*Math.PI);
-            ctx.fill();
-            
-            ctx.restore();
-        }
-
-        // Анимация бега (мигание) – просто меняем масштаб или добавляем эффект
-        let step = 0;
-        function updateStep() {
-            step = (step + 1) % 20;
-        }
-
-        // ---- ОСТАЛЬНАЯ ЛОГИКА (без изменений) ----
-        function resetGame(){
-            gameRunning = true;
-            score = 0;
-            document.getElementById('scoreValue').innerText = "0";
-            currentSpeed = baseSpeed;
-            obstacles = [];
-            spawnCounter = 10;
-            isJumping = false; jumpVel = 0;
-            charY = CHAR_BASE;
-            canJumpFlag = true;
-        }
-
-        function gameOver(){
-            gameRunning = false;
-            let currentInt = Math.floor(score);
-            if(currentInt > bestScore){
-                bestScore = currentInt;
-                localStorage.setItem('dinoBest', bestScore);
-                document.getElementById('bestValue').innerText = bestScore;
-            }
-        }
-
-        function jump(){
-            if(!gameRunning){
-                resetGame();
-                return;
-            }
-            if(!isJumping && canJumpFlag){
-                isJumping = true;
-                jumpVel = JUMP_POWER;
-                canJumpFlag = false;
-            }
-        }
-
-        function updateChar(){
-            if(isJumping){
-                charY += jumpVel;
-                jumpVel += GRAVITY;
-                if(charY >= CHAR_BASE){
-                    charY = CHAR_BASE;
-                    isJumping = false;
-                    canJumpFlag = true;
-                    jumpVel = 0;
-                }
-                if(charY < 0) charY = 0;
-            }
-        }
-
-        function spawnObstacle(){
-            obstacles.push({ x: W, w: OBS_W, h: OBS_H, y: H - OBS_H - 8 });
-        }
-
-        function updateObstacles(){
-            for(let i=0;i<obstacles.length;i++){
-                obstacles[i].x -= currentSpeed;
-                if(obstacles[i].x + obstacles[i].w < 0){
-                    obstacles.splice(i,1); i--;
-                }
-            }
-            const charRect = { x: 65, y: charY, w: CHAR_W, h: CHAR_H };
-            for(let obs of obstacles){
-                const obsRect = { x: obs.x, y: obs.y, w: obs.w, h: obs.h };
-                if(charRect.x < obsRect.x + obsRect.w &&
-                    charRect.x + charRect.w > obsRect.x &&
-                    charRect.y < obsRect.y + obsRect.h &&
-                    charRect.y + charRect.h > obsRect.y){
-                    gameOver();
-                    break;
-                }
-            }
-        }
-
-        function updateScoreAndSpeed(){
-            if(gameRunning){
-                score += 0.16;
-                let scoreInt = Math.floor(score);
-                document.getElementById('scoreValue').innerText = scoreInt;
-                if(scoreInt > bestScore){
-                    bestScore = scoreInt;
-                    localStorage.setItem('dinoBest', bestScore);
-                    document.getElementById('bestValue').innerText = bestScore;
-                }
-                let speedMult = 1 + Math.floor(score / 250) * 0.18;
-                if(speedMult > 2.0) speedMult = 2.0;
-                currentSpeed = baseSpeed + (baseSpeed * (speedMult-1) * 0.6);
-                let dynamicGap = Math.max(40, 70 - Math.floor(score/140));
-                spawnGap = dynamicGap;
-            }
-        }
-
-        function handleSpawning(){
-            if(!gameRunning) return;
-            if(spawnCounter <= 0){
-                spawnObstacle();
-                let extra = 12 + Math.random() * 28;
-                spawnCounter = spawnGap + extra;
-            } else {
-                spawnCounter--;
-            }
-        }
-
-        // Отрисовка окружения
-        function drawBackground(){
-            ctx.fillStyle = "#11161f";
-            ctx.fillRect(0,0,W,H);
-            ctx.fillStyle = "#2a3a4a";
-            for(let i=0;i<40;i++){
-                let sx = (i*137)%W;
-                let sy = (i*73)%(H-40);
-                ctx.fillRect(sx, sy, 1,1);
-            }
-        }
-
-        function drawGround(){
-            ctx.fillStyle = "#2c3a2f";
-            ctx.fillRect(0, H-8, W, 8);
-            ctx.fillStyle = "#638c5b";
-            for(let i=0;i<12;i++){
-                let x = (groundOffset + i*48) % (W+60)-30;
-                if(x>0 && x<W){
-                    ctx.fillRect(x, H-7, 2, 3);
-                }
-            }
-            groundOffset = (groundOffset + currentSpeed) % 70;
-            ctx.strokeStyle = "#90b87a";
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(0, H-4);
-            ctx.lineTo(W, H-4);
+            ctx.moveTo(o.x+o.w-4,sy+2);
+            ctx.lineTo(o.x+o.w+4,sy);
             ctx.stroke();
         }
+    }
+}
 
-        function drawObstacles(){
-            for(let obs of obstacles){
-                ctx.fillStyle = "#b87c4f";
-                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-                ctx.fillStyle = "#7a4a2a";
-                ctx.fillRect(obs.x+4, obs.y-6, 3,8);
-                ctx.fillRect(obs.x+10, obs.y-4, 3,6);
-            }
-        }
+function drawParticles(){
 
-        function drawGameOverlay(){
-            if(!gameRunning){
-                ctx.globalAlpha = 0.85;
-                ctx.fillStyle = "#03070e";
-                ctx.fillRect(0,0,W,H);
-                ctx.globalAlpha = 1;
-                ctx.fillStyle = "#ffd994";
-                ctx.font = "bold 26px system-ui, monospace";
-                ctx.fillText("GAME OVER", W/2-85, H/2-15);
-                ctx.font = "13px monospace";
-                ctx.fillStyle = "#bbccff";
-                ctx.fillText("нажми / коснись", W/2-70, H/2+25);
-            }
-        }
+    for(let p of particles){
 
-        function updateGame(){
-            if(gameRunning){
-                updateChar();
-                updateObstacles();
-                updateScoreAndSpeed();
-                handleSpawning();
-                updateStep();
-            }
-        }
+        ctx.globalAlpha = p.life/50;
 
-        function draw(){
-            drawBackground();
-            drawGround();
-            drawObstacles();
-            // Рисуем нового персонажа
-            drawCharacter(ctx, 65, charY, CHAR_W, CHAR_H);
-            drawGameOverlay();
-        }
+        ctx.fillStyle = "#8cff7a";
 
-        function gameLoop(){
-            updateGame();
-            draw();
-            requestAnimationFrame(gameLoop);
-        }
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+        ctx.fill();
+    }
 
-        // Управление
-        window.addEventListener('keydown', (e) => {
-            if(e.code === 'Space' || e.code === 'ArrowUp'){
-                e.preventDefault();
-                jump();
-            }
-        });
-        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
-        canvas.addEventListener('mousedown', (e) => { e.preventDefault(); jump(); });
-        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    ctx.globalAlpha = 1;
+}
 
-        resetGame();
-        gameLoop();
-    })();
+function drawOverlay(){
+
+    if(!gameOver) return;
+
+    ctx.fillStyle = "rgba(0,0,0,.5)";
+    ctx.fillRect(0,0,BASE_W,BASE_H);
+
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+
+    ctx.font = "bold 48px system-ui";
+    ctx.fillText("GAME OVER",BASE_W/2,120);
+
+    ctx.font = "24px system-ui";
+    ctx.fillStyle = "#9dd2ff";
+
+    ctx.fillText(
+        "Нажми чтобы начать снова",
+        BASE_W/2,
+        170
+    );
+}
+
+function render(){
+
+    drawBackground();
+    drawClouds();
+    drawGround();
+    drawObstacles();
+    drawPlayer();
+    drawParticles();
+    drawOverlay();
+}
+
+function loop(){
+
+    update();
+    render();
+
+    requestAnimationFrame(loop);
+}
+
+window.addEventListener("keydown",(e)=>{
+
+    if(e.code === "Space" || e.code === "ArrowUp"){
+        e.preventDefault();
+        jump();
+    }
+});
+
+canvas.addEventListener("mousedown",(e)=>{
+    e.preventDefault();
+    jump();
+});
+
+canvas.addEventListener("touchstart",(e)=>{
+    e.preventDefault();
+    jump();
+},{passive:false});
+
+canvas.addEventListener("contextmenu",(e)=>{
+    e.preventDefault();
+});
+
+reset();
+loop();
+
+})();
 </script>
+
 </body>
 </html>

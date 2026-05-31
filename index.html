@@ -129,7 +129,8 @@
 
         let gameRunning = true;
         let score = 0;
-        let bestScore = localStorage.getItem('dinoBest') ? parseInt(localStorage.getItem('dinoBest')) : 0;
+        // Загружаем сохранённый рекорд (целое число)
+        let bestScore = localStorage.getItem('dinoBest') ? Math.floor(parseFloat(localStorage.getItem('dinoBest'))) : 0;
         document.getElementById('bestValue').innerText = bestScore;
 
         // --- ДИНО ---
@@ -149,20 +150,20 @@
         let groundOffset = 0;
         let canJumpFlag = true;
 
-        // --- ЧАСТИЦЫ ПРИ ПРЫЖКЕ ---
+        // --- ЧАСТИЦЫ ---
         let particles = [];
 
-        // --- ФОНОВЫЕ ЗВЁЗДЫ / ОБЛАКА (параллакс) ---
+        // --- ФОНОВЫЕ ОБЛАКА ---
         let clouds = [
             {x: 150, y: 45, size: 28, speed: 0.4},
             {x: 500, y: 80, size: 36, speed: 0.3},
             {x: 720, y: 30, size: 24, speed: 0.5}
         ];
 
-        // --- ФУНКЦИИ ---
-        function updateBest(){
-            if(Math.floor(score) > bestScore){
-                bestScore = Math.floor(score);
+        // Обновление рекорда (вызывается из updateScoreAndSpeed)
+        function updateBestIfNeeded(currentInt){
+            if(currentInt > bestScore){
+                bestScore = currentInt;
                 localStorage.setItem('dinoBest', bestScore);
                 document.getElementById('bestValue').innerText = bestScore;
             }
@@ -183,7 +184,6 @@
 
         function gameOver(){
             gameRunning = false;
-            updateBest();
         }
 
         function jump(){
@@ -195,7 +195,6 @@
                 isJumping = true;
                 jumpVel = JUMP_POWER;
                 canJumpFlag = false;
-                // частицы при прыжке
                 for(let i=0;i<8;i++){
                     particles.push({
                         x: 75 + DINO_W/2,
@@ -254,7 +253,16 @@
         function updateScoreAndSpeed(){
             if(gameRunning){
                 score += 0.18;
-                document.getElementById('scoreValue').innerText = Math.floor(score);
+                let currentScoreInt = Math.floor(score);
+                document.getElementById('scoreValue').innerText = currentScoreInt;
+                
+                // 🔥 Рекорд обновляется в реальном времени (без ожидания Game Over)
+                if(currentScoreInt > bestScore){
+                    bestScore = currentScoreInt;
+                    localStorage.setItem('dinoBest', bestScore);
+                    document.getElementById('bestValue').innerText = bestScore;
+                }
+                
                 let speedMult = 1 + Math.floor(score / 280) * 0.2;
                 if(speedMult > 2.2) speedMult = 2.2;
                 currentSpeed = baseSpeed + (baseSpeed * (speedMult-1) * 0.7);
@@ -274,7 +282,6 @@
             }
         }
 
-        // --- ЧАСТИЦЫ ---
         function updateParticles(){
             for(let i=0;i<particles.length;i++){
                 particles[i].x += particles[i].vx;
@@ -286,7 +293,6 @@
             }
         }
 
-        // --- ОБЛАКА С ПАРАЛЛАКСОМ ---
         function updateClouds(){
             for(let c of clouds){
                 c.x -= c.speed;
@@ -294,14 +300,12 @@
             }
         }
 
-        // === ОТРИСОВКА СТИЛЬ ===
         function drawBackground(){
             let grad = ctx.createLinearGradient(0,0,0,H);
             grad.addColorStop(0,"#0e1c28");
             grad.addColorStop(1,"#162836");
             ctx.fillStyle = grad;
             ctx.fillRect(0,0,W,H);
-            // звёзды
             ctx.fillStyle = "#ffffff";
             for(let i=0;i<60;i++){
                 let sx = (i*131)%W;
@@ -343,22 +347,18 @@
         }
 
         function drawDino(){
-            // тело
             ctx.fillStyle = "#48c98e";
             ctx.shadowBlur = 8;
             ctx.shadowColor = "#2affb0";
             ctx.fillRect(75, dinoY, DINO_W, DINO_H);
             ctx.fillStyle = "#2ca06a";
             ctx.fillRect(75+5, dinoY+8, DINO_W-10, DINO_H-14);
-            // глаз
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(75+20, dinoY+7, 5,5);
             ctx.fillStyle = "#000";
             ctx.fillRect(75+21, dinoY+8, 3,3);
-            // шипы
             ctx.fillStyle = "#c0ffb0";
             for(let i=0;i<3;i++) ctx.fillRect(75+7+i*7, dinoY-5, 4, 7);
-            // ноги
             ctx.fillStyle = "#257a56";
             let step = Math.floor(Date.now()/150)%2;
             if(!isJumping && step===0){
@@ -435,7 +435,6 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // --- УПРАВЛЕНИЕ ---
         window.addEventListener('keydown', (e) => {
             if(e.code === 'Space' || e.code === 'ArrowUp'){
                 e.preventDefault();

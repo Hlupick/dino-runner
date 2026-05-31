@@ -1,392 +1,70 @@
+```html
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+
 <meta name="viewport"
 content="width=device-width,initial-scale=1.0,user-scalable=no">
 
-<title>Chrome Dino Clone</title>
+<title>Chrome Dino</title>
 
 <style>
-*{
+html,
+body{
     margin:0;
-    padding:0;
-    box-sizing:border-box;
-    -webkit-tap-highlight-color:transparent;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#f7f7f7;
 }
 
 body{
-    background:#f7f7f7;
     display:flex;
     justify-content:center;
     align-items:center;
-    min-height:100vh;
-    overflow:hidden;
-    font-family:Arial,sans-serif;
 }
 
-canvas{
-    width:min(100vw,1000px);
-    height:auto;
-    display:block;
-    background:#f7f7f7;
-    touch-action:none;
+.runner-container{
+    position:relative;
+    width:100%;
+    max-width:1000px;
+    height:300px;
+}
+
+#offline-resources{
+    display:none;
 }
 </style>
 </head>
+
 <body>
 
-<canvas id="game"></canvas>
+<div class="runner-container"></div>
+
+<!-- Ресурсы для Chromium Runner -->
+<div id="offline-resources">
+
+<img id="offline-resources-1x"
+src="100-error-offline.png">
+
+<img id="offline-resources-2x"
+src="200-error-offline.png">
+
+<img id="offline-resources-1x-dark"
+src="100-error-offline-dark.png">
+
+<img id="offline-resources-2x-dark"
+src="200-error-offline-dark.png">
+
+</div>
+
+<script src="offline.js"></script>
 
 <script>
-(() => {
-
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-const W = 1000;
-const H = 300;
-
-canvas.width = W;
-canvas.height = H;
-
-const groundY = 250;
-
-let speed = 8;
-let score = 0;
-let gameOver = false;
-let frame = 0;
-
-let best = +localStorage.getItem("chromeDinoBest") || 0;
-
-const player = {
-    x:70,
-    y:groundY - 48,
-    w:44,
-    h:48,
-    vy:0,
-    jumping:false,
-    leg:0,
-    blink:0
-};
-
-const obstacles = [];
-const clouds = [];
-
-for(let i=0;i<3;i++){
-    clouds.push({
-        x:Math.random()*W,
-        y:40+Math.random()*60,
-        w:46,
-        h:14
-    });
-}
-
-function jump(){
-
-    if(gameOver){
-        restart();
-        return;
-    }
-
-    if(!player.jumping){
-        player.jumping = true;
-        player.vy = -15;
-    }
-}
-
-function restart(){
-
-    gameOver = false;
-    obstacles.length = 0;
-    score = 0;
-    speed = 8;
-    frame = 0;
-
-    player.y = groundY - player.h;
-    player.vy = 0;
-    player.jumping = false;
-}
-
-function spawnObstacle(){
-
-    const tall = Math.random() > 0.5;
-
-    obstacles.push({
-        x:W + 20,
-        y:tall ? groundY - 46 : groundY - 34,
-        w:tall ? 22 : 44,
-        h:tall ? 46 : 34,
-        type:tall ? "cactus" : "double"
-    });
-}
-
-function update(){
-
-    frame++;
-
-    if(gameOver) return;
-
-    score += 0.1;
-
-    if(Math.floor(score) > best){
-        best = Math.floor(score);
-        localStorage.setItem("chromeDinoBest", best);
-    }
-
-    speed += 0.001;
-
-    if(frame % Math.max(70 - Math.floor(score/20),35) === 0){
-        spawnObstacle();
-    }
-
-    player.vy += 0.8;
-    player.y += player.vy;
-
-    if(player.y >= groundY - player.h){
-        player.y = groundY - player.h;
-        player.vy = 0;
-        player.jumping = false;
-    }
-
-    if(!player.jumping){
-        player.leg += 0.35;
-    }
-
-    if(Math.random() < 0.003){
-        player.blink = 5;
-    }
-
-    if(player.blink > 0){
-        player.blink--;
-    }
-
-    for(let cloud of clouds){
-
-        cloud.x -= 1;
-
-        if(cloud.x + cloud.w < 0){
-            cloud.x = W + 50;
-        }
-    }
-
-    for(let i=obstacles.length-1;i>=0;i--){
-
-        const o = obstacles[i];
-
-        o.x -= speed;
-
-        if(o.x + o.w < 0){
-            obstacles.splice(i,1);
-            continue;
-        }
-
-        if(
-            player.x + 6 < o.x + o.w &&
-            player.x + player.w - 6 > o.x &&
-            player.y + 6 < o.y + o.h &&
-            player.y + player.h - 6 > o.y
-        ){
-            gameOver = true;
-        }
-    }
-}
-
-function drawBackground(){
-
-    ctx.fillStyle="#f7f7f7";
-    ctx.fillRect(0,0,W,H);
-
-    // clouds
-    ctx.fillStyle="#d8d8d8";
-
-    for(let c of clouds){
-
-        ctx.beginPath();
-        ctx.ellipse(c.x,c.y,c.w/2,c.h/2,0,0,Math.PI*2);
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.ellipse(c.x+18,c.y-4,c.w/3,c.h/2,0,0,Math.PI*2);
-        ctx.fill();
-    }
-
-    // ground
-    ctx.strokeStyle="#535353";
-    ctx.lineWidth=2;
-
-    ctx.beginPath();
-    ctx.moveTo(0,groundY);
-    ctx.lineTo(W,groundY);
-    ctx.stroke();
-
-    // ground details
-    for(let i=0;i<40;i++){
-
-        const x = (i*40 - (frame*speed)%40);
-
-        ctx.beginPath();
-        ctx.moveTo(x,groundY+1);
-        ctx.lineTo(x+14,groundY+1);
-        ctx.stroke();
-    }
-}
-
-function drawPlayer(){
-
-    const x = player.x;
-    const y = player.y;
-
-    ctx.fillStyle="#535353";
-
-    // body
-    ctx.fillRect(x+8,y+10,28,28);
-
-    // neck
-    ctx.fillRect(x+24,y+4,8,12);
-
-    // head
-    ctx.fillRect(x+24,y,18,16);
-
-    // tail
-    ctx.fillRect(x,y+24,12,6);
-
-    // eye
-    ctx.fillStyle="#fff";
-
-    if(player.blink > 0){
-        ctx.fillRect(x+35,y+5,4,1);
-    }else{
-        ctx.fillRect(x+35,y+4,4,4);
-
-        ctx.fillStyle="#000";
-        ctx.fillRect(x+36,y+5,2,2);
-    }
-
-    ctx.fillStyle="#535353";
-
-    // arms
-    ctx.fillRect(x+20,y+18,6,12);
-
-    // legs
-    const legMove = Math.sin(player.leg)*6;
-
-    if(player.jumping){
-
-        ctx.fillRect(x+10,y+36,6,12);
-        ctx.fillRect(x+28,y+36,6,12);
-
-    }else{
-
-        ctx.fillRect(x+10,y+36,6,12+legMove);
-        ctx.fillRect(x+28,y+36,6,12-legMove);
-    }
-}
-
-function drawObstacles(){
-
-    ctx.fillStyle="#535353";
-
-    for(let o of obstacles){
-
-        if(o.type === "cactus"){
-
-            ctx.fillRect(o.x,o.y,22,46);
-
-            ctx.fillRect(o.x-8,o.y+18,8,8);
-
-            ctx.fillRect(o.x+22,o.y+10,8,8);
-
-        }else{
-
-            ctx.fillRect(o.x,o.y,16,34);
-            ctx.fillRect(o.x+20,o.y,16,34);
-        }
-    }
-}
-
-function drawUI(){
-
-    ctx.fillStyle="#535353";
-    ctx.font="24px Arial";
-
-    ctx.fillText(
-        "HI " + String(best).padStart(5,"0"),
-        W - 250,
-        40
-    );
-
-    ctx.fillText(
-        String(Math.floor(score)).padStart(5,"0"),
-        W - 120,
-        40
-    );
-
-    if(gameOver){
-
-        ctx.font="34px Arial";
-        ctx.textAlign="center";
-
-        ctx.fillText(
-            "GAME OVER",
-            W/2,
-            120
-        );
-
-        ctx.font="20px Arial";
-
-        ctx.fillText(
-            "PRESS SPACE / TAP TO RESTART",
-            W/2,
-            160
-        );
-
-        ctx.textAlign="left";
-    }
-}
-
-function render(){
-
-    drawBackground();
-    drawObstacles();
-    drawPlayer();
-    drawUI();
-}
-
-function loop(){
-
-    update();
-    render();
-
-    requestAnimationFrame(loop);
-}
-
-window.addEventListener("keydown",(e)=>{
-
-    if(
-        e.code === "Space" ||
-        e.code === "ArrowUp"
-    ){
-        e.preventDefault();
-        jump();
-    }
-});
-
-canvas.addEventListener("mousedown",(e)=>{
-    e.preventDefault();
-    jump();
-});
-
-canvas.addEventListener("touchstart",(e)=>{
-    e.preventDefault();
-    jump();
-},{passive:false});
-
-restart();
-loop();
-
-})();
+new Runner('.runner-container');
 </script>
 
 </body>
 </html>
+```

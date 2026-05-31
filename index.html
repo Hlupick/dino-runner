@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Dino Runner</title>
+    <title>Runner · Minimal</title>
     <style>
         * {
             margin: 0;
@@ -55,7 +55,6 @@
             padding: 6px 18px;
             border-radius: 40px;
             color: #c0e0ff;
-            backdrop-filter: blur(4px);
         }
 
         .best {
@@ -103,14 +102,15 @@
         let bestScore = localStorage.getItem('dinoBest') ? Math.floor(parseFloat(localStorage.getItem('dinoBest'))) : 0;
         document.getElementById('bestValue').innerText = bestScore;
 
-        // Динозавр (простой, минималистичный)
-        const DINO_W = 22, DINO_H = 28;
-        let dinoY = H - DINO_H - 8;
-        const DINO_BASE = H - DINO_H - 8;
+        // ---- РАЗМЕРЫ ПЕРСОНАЖА (те же, что у динозавра) ----
+        const CHAR_W = 28;
+        const CHAR_H = 34;
+        let charY = H - CHAR_H - 8;
+        const CHAR_BASE = H - CHAR_H - 8;
         let isJumping = false, jumpVel = 0;
         const GRAVITY = 0.85, JUMP_POWER = -9.8;
 
-        // Кактусы
+        // Препятствия
         let obstacles = [];
         const OBS_W = 14, OBS_H = 26;
         let currentSpeed = 4.5;
@@ -120,6 +120,78 @@
         let groundOffset = 0;
         let canJumpFlag = true;
 
+        // ---- ОТРИСОВКА НОВОГО ПЕРСОНАЖА ПО КООРДИНАТАМ ИЗ JSON ----
+        // Исходные линии (масштаб от -4 до +4 по X и Y)
+        const lines = [
+            [[-3.94, -3.5], [-3.94, 0.5], [-3.94, 3.5]],
+            [[-3.94, -3.5], [0.06, -3.5], [3.94, -3.5]],
+            [[-3.94, 0.5], [-1.11, 3.33], [0.94, 4.5]],
+            [[0.94, 4.5], [0.94, 0.5]],
+            [[0.94, 4.5], [3.94, 4.5]],
+            [[3.94, -3.5], [3.94, 0.5], [3.94, 4.5]]
+        ];
+
+        function drawCharacter(ctx, x, y, w, h) {
+            // Масштабируем: исходные координаты лежат в диапазоне примерно от -4 до 4 по X и Y.
+            // Центр фигуры (0,0) совместим с центром нашего прямоугольника.
+            const centerX = x + w/2;
+            const centerY = y + h/2;
+            const scaleX = w / 8;   // 8 = размах по X от -4 до +4
+            const scaleY = h / 8;   // 8 = размах по Y от -4 до +4
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.scale(scaleX, scaleY);
+            ctx.beginPath();
+            ctx.lineWidth = 0.2;   // толщина линии в локальных координатах (~2 пикселя)
+            ctx.strokeStyle = "#8bc34a";
+            ctx.fillStyle = "#8bc34a";
+            
+            // Рисуем каждый отрезок
+            for (let poly of lines) {
+                if (poly.length < 2) continue;
+                ctx.beginPath();
+                ctx.moveTo(poly[0][0], poly[0][1]);
+                for (let i = 1; i < poly.length; i++) {
+                    ctx.lineTo(poly[i][0], poly[i][1]);
+                }
+                ctx.stroke();
+            }
+            // Заполним внутренность (чтобы было похоже на силуэт) – необязательно, но добавим лёгкую заливку
+            // Можно залить всю фигуру – для этого соберём все точки в один контур. Упростим: просто закрасим полупрозрачным фоном.
+            ctx.globalAlpha = 0.15;
+            ctx.fillStyle = "#8bc34a";
+            for (let poly of lines) {
+                if (poly.length < 3) continue;
+                ctx.beginPath();
+                ctx.moveTo(poly[0][0], poly[0][1]);
+                for (let i = 1; i < poly.length; i++) {
+                    ctx.lineTo(poly[i][0], poly[i][1]);
+                }
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            
+            // Дополнительно нарисуем «глаз» для живости (маленькая точка)
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(0.94, 2.0, 0.2, 0, 2*Math.PI);
+            ctx.fill();
+            ctx.fillStyle = "#1c2b0f";
+            ctx.beginPath();
+            ctx.arc(0.94, 2.0, 0.1, 0, 2*Math.PI);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        // Анимация бега (мигание) – просто меняем масштаб или добавляем эффект
+        let step = 0;
+        function updateStep() {
+            step = (step + 1) % 20;
+        }
+
+        // ---- ОСТАЛЬНАЯ ЛОГИКА (без изменений) ----
         function resetGame(){
             gameRunning = true;
             score = 0;
@@ -128,13 +200,12 @@
             obstacles = [];
             spawnCounter = 10;
             isJumping = false; jumpVel = 0;
-            dinoY = DINO_BASE;
+            charY = CHAR_BASE;
             canJumpFlag = true;
         }
 
         function gameOver(){
             gameRunning = false;
-            // обновляем рекорд, если нужно
             let currentInt = Math.floor(score);
             if(currentInt > bestScore){
                 bestScore = currentInt;
@@ -155,17 +226,17 @@
             }
         }
 
-        function updateDino(){
+        function updateChar(){
             if(isJumping){
-                dinoY += jumpVel;
+                charY += jumpVel;
                 jumpVel += GRAVITY;
-                if(dinoY >= DINO_BASE){
-                    dinoY = DINO_BASE;
+                if(charY >= CHAR_BASE){
+                    charY = CHAR_BASE;
                     isJumping = false;
                     canJumpFlag = true;
                     jumpVel = 0;
                 }
-                if(dinoY < 0) dinoY = 0;
+                if(charY < 0) charY = 0;
             }
         }
 
@@ -180,13 +251,13 @@
                     obstacles.splice(i,1); i--;
                 }
             }
-            const dinoRect = { x: 65, y: dinoY, w: DINO_W, h: DINO_H };
+            const charRect = { x: 65, y: charY, w: CHAR_W, h: CHAR_H };
             for(let obs of obstacles){
                 const obsRect = { x: obs.x, y: obs.y, w: obs.w, h: obs.h };
-                if(dinoRect.x < obsRect.x + obsRect.w &&
-                    dinoRect.x + dinoRect.w > obsRect.x &&
-                    dinoRect.y < obsRect.y + obsRect.h &&
-                    dinoRect.y + dinoRect.h > obsRect.y){
+                if(charRect.x < obsRect.x + obsRect.w &&
+                    charRect.x + charRect.w > obsRect.x &&
+                    charRect.y < obsRect.y + obsRect.h &&
+                    charRect.y + charRect.h > obsRect.y){
                     gameOver();
                     break;
                 }
@@ -198,13 +269,11 @@
                 score += 0.16;
                 let scoreInt = Math.floor(score);
                 document.getElementById('scoreValue').innerText = scoreInt;
-                // рекорд обновляется мгновенно
                 if(scoreInt > bestScore){
                     bestScore = scoreInt;
                     localStorage.setItem('dinoBest', bestScore);
                     document.getElementById('bestValue').innerText = bestScore;
                 }
-                // сложность растёт плавно
                 let speedMult = 1 + Math.floor(score / 250) * 0.18;
                 if(speedMult > 2.0) speedMult = 2.0;
                 currentSpeed = baseSpeed + (baseSpeed * (speedMult-1) * 0.6);
@@ -224,11 +293,10 @@
             }
         }
 
-        // ----- Отрисовка (минимализм) -----
+        // Отрисовка окружения
         function drawBackground(){
             ctx.fillStyle = "#11161f";
             ctx.fillRect(0,0,W,H);
-            // лёгкие точки (звёзды)
             ctx.fillStyle = "#2a3a4a";
             for(let i=0;i<40;i++){
                 let sx = (i*137)%W;
@@ -254,28 +322,6 @@
             ctx.moveTo(0, H-4);
             ctx.lineTo(W, H-4);
             ctx.stroke();
-        }
-
-        function drawDino(){
-            ctx.fillStyle = "#8bc34a";
-            ctx.fillRect(65, dinoY, DINO_W, DINO_H);
-            ctx.fillStyle = "#5a8f2c";
-            ctx.fillRect(65+5, dinoY+6, DINO_W-10, DINO_H-12);
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(65+14, dinoY+6, 4,4);
-            ctx.fillStyle = "#1c2b0f";
-            ctx.fillRect(65+15, dinoY+7, 2,2);
-            // шипы
-            for(let i=0;i<2;i++) ctx.fillRect(65+5+i*9, dinoY-4, 3,5);
-            // ноги
-            let step = Math.floor(Date.now()/150)%2;
-            if(!isJumping && step===0){
-                ctx.fillRect(65+3, dinoY+DINO_H-5, 5,7);
-                ctx.fillRect(65+DINO_W-8, dinoY+DINO_H-5, 5,7);
-            } else {
-                ctx.fillRect(65+3, dinoY+DINO_H-4, 5,6);
-                ctx.fillRect(65+DINO_W-8, dinoY+DINO_H-4, 5,6);
-            }
         }
 
         function drawObstacles(){
@@ -305,10 +351,11 @@
 
         function updateGame(){
             if(gameRunning){
-                updateDino();
+                updateChar();
                 updateObstacles();
                 updateScoreAndSpeed();
                 handleSpawning();
+                updateStep();
             }
         }
 
@@ -316,7 +363,8 @@
             drawBackground();
             drawGround();
             drawObstacles();
-            drawDino();
+            // Рисуем нового персонажа
+            drawCharacter(ctx, 65, charY, CHAR_W, CHAR_H);
             drawGameOverlay();
         }
 
